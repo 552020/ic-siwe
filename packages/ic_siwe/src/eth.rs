@@ -11,6 +11,7 @@ pub enum EthError {
     InvalidRecoveryId,
     PublicKeyRecoveryFailure,
     Eip55Error(String),
+    Other(String),
 }
 
 impl From<hex::FromHexError> for EthError {
@@ -31,6 +32,7 @@ impl fmt::Display for EthError {
                 write!(f, "Public key recovery failure")
             }
             EthError::Eip55Error(e) => write!(f, "EIP-55 error: {}", e),
+            EthError::Other(e) => write!(f, "Other error: {}", e),
         }
     }
 }
@@ -243,11 +245,8 @@ pub fn derive_eth_address_from_public_key(key: &VerifyingKey) -> Result<String, 
 ///
 /// The EIP-55-compliant Ethereum address if successful, or an error.
 pub fn convert_to_eip55(address: &str) -> Result<String, EthError> {
-    let address_trimmed = if address.starts_with("0x") {
-        address.strip_prefix("0x").unwrap()
-    } else {
-        address
-    };
+    let address_trimmed =
+        if address.starts_with("0x") { address.strip_prefix("0x").unwrap() } else { address };
 
     let address_lowercase = address_trimmed.to_lowercase();
 
@@ -265,11 +264,8 @@ pub fn convert_to_eip55(address: &str) -> Result<String, EthError> {
                 '0'..='9' => c.to_string(), // Keep digits as is
                 'a'..='f' | 'A'..='F' => {
                     // Extract the corresponding nibble from the hash
-                    let hash_nibble = if i % 2 == 0 {
-                        (hash[i / 2] >> 4) & 0x0f
-                    } else {
-                        hash[i / 2] & 0x0f
-                    };
+                    let hash_nibble =
+                        if i % 2 == 0 { (hash[i / 2] >> 4) & 0x0f } else { hash[i / 2] & 0x0f };
 
                     // Uppercase if the nibble is 8 or more
                     if hash_nibble >= 8 {
@@ -279,10 +275,7 @@ pub fn convert_to_eip55(address: &str) -> Result<String, EthError> {
                     }
                 }
                 _ => {
-                    return Err(format!(
-                        "Unrecognized hex character '{}' at position {}",
-                        c, i
-                    ));
+                    return Err(format!("Unrecognized hex character '{}' at position {}", c, i));
                 }
             };
             Ok(result)
@@ -303,10 +296,7 @@ mod eth_address {
         let result = EthAddress::new(invalid_address.as_str());
         assert!(result.is_err());
         let err_msg: String = result.unwrap_err().into();
-        assert_eq!(
-            err_msg,
-            "Decoding error: Invalid character 'G' at position 0"
-        );
+        assert_eq!(err_msg, "Decoding error: Invalid character 'G' at position 0");
     }
 
     #[test]
@@ -315,10 +305,7 @@ mod eth_address {
         let result = EthAddress::new(invalid_address.as_str());
         assert!(result.is_err());
         let err_msg: String = result.unwrap_err().into();
-        assert_eq!(
-            err_msg,
-            "Decoding error: Invalid character 'G' at position 0"
-        );
+        assert_eq!(err_msg, "Decoding error: Invalid character 'G' at position 0");
     }
 
     #[test]
@@ -327,10 +314,7 @@ mod eth_address {
         let result = EthAddress::new(invalid_address.as_str());
         assert!(result.is_err());
         let err_msg: String = result.unwrap_err().into();
-        assert_eq!(
-            err_msg,
-            "Address format error: Must start with '0x' and be 42 characters long"
-        );
+        assert_eq!(err_msg, "Address format error: Must start with '0x' and be 42 characters long");
     }
 
     #[test]
@@ -339,10 +323,7 @@ mod eth_address {
         let result = EthAddress::new(invalid_address.as_str());
         assert!(result.is_err());
         let err_msg: String = result.unwrap_err().into();
-        assert_eq!(
-            err_msg,
-            "Address format error: Must start with '0x' and be 42 characters long"
-        );
+        assert_eq!(err_msg, "Address format error: Must start with '0x' and be 42 characters long");
     }
     #[test]
     fn test_eth_address_invalid_eip55() {
