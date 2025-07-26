@@ -1,4 +1,4 @@
-use crate::{settings::Settings, SETTINGS};
+use crate::settings::Settings;
 
 /// Initializes the SIWE library with the provided settings. Must be called before any other SIWE functions. Use the [SettingsBuilder](crate::settings::SettingsBuilder)  to create a [Settings] object.
 ///
@@ -50,22 +50,7 @@ fn init_rng() {
     // Ensure global state is initialized
     ensure_globals_initialized();
 
-    // Force immediate RNG initialization instead of relying on timer
-    ic_cdk::futures::spawn(async {
-        let response =
-            ic_cdk::call::Call::unbounded_wait(Principal::management_canister(), "raw_rand")
-                .with_arg(())
-                .await
-                .unwrap();
-        let (seed,): ([u8; 32],) = candid::decode_one(&response.into_bytes()).unwrap();
-        RNG.get()
-            .expect("RNG global state should be initialized")
-            .write()
-            .unwrap()
-            .replace(ChaCha20Rng::from_seed(seed));
-    });
-
-    // Also keep the timer as a fallback
+    // Use timer-based initialization to avoid init mode restrictions
     ic_cdk_timers::set_timer(Duration::ZERO, || {
         ic_cdk::futures::spawn(async {
             let response =

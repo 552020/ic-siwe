@@ -17,7 +17,7 @@ use crate::{
     signature_map::SignatureMap,
     siwe::{SiweMessage, SiweMessageError},
     time::get_current_time,
-    with_settings, SIWE_MESSAGES,
+    with_settings,
 };
 
 const MAX_SIGS_TO_PRUNE: usize = 10;
