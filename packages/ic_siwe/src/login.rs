@@ -44,7 +44,7 @@ const MAX_SIGS_TO_PRUNE: usize = 10;
 /// let (message, nonce) = prepare_login(&address).unwrap();
 /// ```
 pub fn prepare_login(address: &EthAddress) -> Result<(SiweMessage, String), EthError> {
-    let nonce = generate_nonce();
+    let nonce = generate_nonce().map_err(|e| EthError::Other(e))?;
     let message = SiweMessage::new(address, &nonce);
 
     // Save the SIWE message for use in the login call
@@ -165,9 +165,7 @@ pub fn login(
 
         // The delegation is valid for the duration of the session as defined in the settings.
         let expiration = with_settings!(|settings: &Settings| {
-            message
-                .issued_at
-                .saturating_add(settings.session_expires_in)
+            message.issued_at.saturating_add(settings.session_expires_in)
         });
 
         // The seed is what uniquely identifies the delegation. It is derived from the salt, the
@@ -186,9 +184,6 @@ pub fn login(
         // user principal.
         let user_canister_pubkey = create_user_canister_pubkey(canister_id, seed.to_vec())?;
 
-        Ok(LoginDetails {
-            expiration,
-            user_canister_pubkey: ByteBuf::from(user_canister_pubkey),
-        })
+        Ok(LoginDetails { expiration, user_canister_pubkey: ByteBuf::from(user_canister_pubkey) })
     })
 }
