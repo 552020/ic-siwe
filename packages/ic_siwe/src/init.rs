@@ -58,12 +58,13 @@ fn init_rng() {
                     .with_arg(())
                     .await
                     .unwrap();
-            let (seed,): ([u8; 32],) = candid::decode_one(&response.into_bytes()).unwrap();
+            let (seed,): (Vec<u8>,) = candid::decode_one(&response.into_bytes()).unwrap();
+            let seed_array: [u8; 32] = seed.try_into().unwrap();
             RNG.get()
                 .expect("RNG global state should be initialized")
                 .write()
                 .unwrap()
-                .replace(ChaCha20Rng::from_seed(seed));
+                .replace(ChaCha20Rng::from_seed(seed_array));
         })
     });
 }
