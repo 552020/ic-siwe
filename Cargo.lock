@@ -2100,6 +2100,7 @@ dependencies = [
  "ic-cdk-timers",
  "ic-certified-map",
  "k256",
+ "once_cell",
  "rand",
  "rand_chacha",
  "serde",
