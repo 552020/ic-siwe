@@ -23,7 +23,18 @@ use crate::{settings::Settings, SETTINGS};
 /// ```
 ///
 pub fn init(settings: Settings) -> Result<(), String> {
-    SETTINGS.set(Some(settings));
+    use crate::{ensure_globals_initialized, SETTINGS};
+
+    // Ensure global state is initialized
+    ensure_globals_initialized();
+
+    // Set the settings in the global state
+    SETTINGS
+        .get()
+        .expect("SETTINGS global state should be initialized")
+        .write()
+        .unwrap()
+        .replace(settings);
 
     init_rng();
 
@@ -31,20 +42,43 @@ pub fn init(settings: Settings) -> Result<(), String> {
 }
 
 fn init_rng() {
-    use crate::RNG;
+    use crate::{ensure_globals_initialized, RNG};
     use candid::Principal;
     use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
     use std::time::Duration;
 
-    // Initialize the random number generator with a seed from the management canister.
-    ic_cdk_timers::set_timer(Duration::ZERO, || {
-        ic_cdk::futures::spawn(async {
-            let response = ic_cdk::call::Call::unbounded_wait(Principal::management_canister(), "raw_rand")
+    // Ensure global state is initialized
+    ensure_globals_initialized();
+
+    // Force immediate RNG initialization instead of relying on timer
+    ic_cdk::futures::spawn(async {
+        let response =
+            ic_cdk::call::Call::unbounded_wait(Principal::management_canister(), "raw_rand")
                 .with_arg(())
                 .await
                 .unwrap();
+        let (seed,): ([u8; 32],) = candid::decode_one(&response.into_bytes()).unwrap();
+        RNG.get()
+            .expect("RNG global state should be initialized")
+            .write()
+            .unwrap()
+            .replace(ChaCha20Rng::from_seed(seed));
+    });
+
+    // Also keep the timer as a fallback
+    ic_cdk_timers::set_timer(Duration::ZERO, || {
+        ic_cdk::futures::spawn(async {
+            let response =
+                ic_cdk::call::Call::unbounded_wait(Principal::management_canister(), "raw_rand")
+                    .with_arg(())
+                    .await
+                    .unwrap();
             let (seed,): ([u8; 32],) = candid::decode_one(&response.into_bytes()).unwrap();
-            RNG.with_borrow_mut(|rng| *rng = Some(ChaCha20Rng::from_seed(seed)));
+            RNG.get()
+                .expect("RNG global state should be initialized")
+                .write()
+                .unwrap()
+                .replace(ChaCha20Rng::from_seed(seed));
         })
     });
 }

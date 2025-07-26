@@ -48,9 +48,14 @@ pub fn prepare_login(address: &EthAddress) -> Result<(SiweMessage, String), EthE
     let message = SiweMessage::new(address, &nonce);
 
     // Save the SIWE message for use in the login call
-    SIWE_MESSAGES.with_borrow_mut(|siwe_messages| {
-        siwe_messages.insert(message.clone(), address, &nonce);
-    });
+    use crate::{ensure_globals_initialized, SIWE_MESSAGES};
+    ensure_globals_initialized();
+    SIWE_MESSAGES
+        .get()
+        .expect("SIWE_MESSAGES global state should be initialized")
+        .write()
+        .unwrap()
+        .insert(message.clone(), address, &nonce);
 
     Ok((message, nonce))
 }
@@ -135,55 +140,62 @@ pub fn login(
 ) -> Result<LoginDetails, LoginError> {
     // Remove expired SIWE messages from the state before proceeding. The init settings determines
     // the time to live for SIWE messages.
-    SIWE_MESSAGES.with_borrow_mut(|siwe_messages| {
-        // Prune any expired SIWE messages from the state.
-        siwe_messages.prune_expired();
+    use crate::{ensure_globals_initialized, SIWE_MESSAGES};
+    ensure_globals_initialized();
 
-        // Get the previously created SIWE message for current address. If it has expired or does not
-        // exist, return an error.
-        let message = siwe_messages.get(address, nonce)?;
-        let message_string: String = message.clone().into();
+    let mut siwe_messages = SIWE_MESSAGES
+        .get()
+        .expect("SIWE_MESSAGES global state should be initialized")
+        .write()
+        .unwrap();
 
-        // Verify the supplied signature against the SIWE message and recover the Ethereum address
-        // used to sign the message.
-        let result = match recover_eth_address(&message_string, signature) {
-            Ok(recovered_address) => {
-                if recovered_address != address.as_str() {
-                    Err(LoginError::AddressMismatch)
-                } else {
-                    Ok(())
-                }
+    // Prune any expired SIWE messages from the state.
+    siwe_messages.prune_expired();
+
+    // Get the previously created SIWE message for current address. If it has expired or does not
+    // exist, return an error.
+    let message = siwe_messages.get(address, nonce)?;
+    let message_string: String = message.clone().into();
+
+    // Verify the supplied signature against the SIWE message and recover the Ethereum address
+    // used to sign the message.
+    let result = match recover_eth_address(&message_string, signature) {
+        Ok(recovered_address) => {
+            if recovered_address != address.as_str() {
+                Err(LoginError::AddressMismatch)
+            } else {
+                Ok(())
             }
-            Err(e) => Err(LoginError::EthError(e)),
-        };
+        }
+        Err(e) => Err(LoginError::EthError(e)),
+    };
 
-        // Ensure the SIWE message is removed from the state both on success and on failure.
-        siwe_messages.remove(address, nonce);
+    // Ensure the SIWE message is removed from the state both on success and on failure.
+    siwe_messages.remove(address, nonce);
 
-        // Handle the result of the signature verification.
-        result?;
+    // Handle the result of the signature verification.
+    result?;
 
-        // The delegation is valid for the duration of the session as defined in the settings.
-        let expiration = with_settings!(|settings: &Settings| {
-            message.issued_at.saturating_add(settings.session_expires_in)
-        });
+    // The delegation is valid for the duration of the session as defined in the settings.
+    let expiration = with_settings!(|settings: &Settings| {
+        message.issued_at.saturating_add(settings.session_expires_in)
+    });
 
-        // The seed is what uniquely identifies the delegation. It is derived from the salt, the
-        // Ethereum address and the SIWE message URI.
-        let seed = generate_seed(address);
+    // The seed is what uniquely identifies the delegation. It is derived from the salt, the
+    // Ethereum address and the SIWE message URI.
+    let seed = generate_seed(address);
 
-        // Before adding the signature to the signature map, prune any expired signatures.
-        signature_map.prune_expired(get_current_time(), MAX_SIGS_TO_PRUNE);
+    // Before adding the signature to the signature map, prune any expired signatures.
+    signature_map.prune_expired(get_current_time(), MAX_SIGS_TO_PRUNE);
 
-        // Create the delegation and add its hash to the signature map. The seed is used as the map key.
-        let delegation = create_delegation(session_key, expiration)?;
-        let delegation_hash = create_delegation_hash(&delegation);
-        signature_map.put(hash::hash_bytes(seed), delegation_hash);
+    // Create the delegation and add its hash to the signature map. The seed is used as the map key.
+    let delegation = create_delegation(session_key, expiration)?;
+    let delegation_hash = create_delegation_hash(&delegation);
+    signature_map.put(hash::hash_bytes(seed), delegation_hash);
 
-        // Create the user canister public key from the seed. From this key, the client can derive the
-        // user principal.
-        let user_canister_pubkey = create_user_canister_pubkey(canister_id, seed.to_vec())?;
+    // Create the user canister public key from the seed. From this key, the client can derive the
+    // user principal.
+    let user_canister_pubkey = create_user_canister_pubkey(canister_id, seed.to_vec())?;
 
-        Ok(LoginDetails { expiration, user_canister_pubkey: ByteBuf::from(user_canister_pubkey) })
-    })
+    Ok(LoginDetails { expiration, user_canister_pubkey: ByteBuf::from(user_canister_pubkey) })
 }

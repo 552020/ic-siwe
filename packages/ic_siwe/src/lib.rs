@@ -180,22 +180,29 @@ pub(crate) mod time;
 
 pub use init::init;
 
+use once_cell::sync::OnceCell;
 use settings::Settings;
 use siwe::SiweMessageMap;
-use std::cell::RefCell;
+use std::sync::RwLock;
 
 use rand_chacha::ChaCha20Rng;
 
-thread_local! {
-    // The random number generator is used to generate nonces for SIWE messages.
-    static RNG: RefCell<Option<ChaCha20Rng>> = const { RefCell::new(None) };
+// Global state using OnceCell for IC compatibility
+// The random number generator is used to generate nonces for SIWE messages.
+static RNG: OnceCell<RwLock<Option<ChaCha20Rng>>> = OnceCell::new();
 
-    // The settings control the behavior of the SIWE library. The settings must be initialized
-    // before any other library functions are called.
-    static SETTINGS: RefCell<Option<Settings>> = const { RefCell::new(None) };
+// The settings control the behavior of the SIWE library. The settings must be initialized
+// before any other library functions are called.
+static SETTINGS: OnceCell<RwLock<Option<Settings>>> = OnceCell::new();
 
-    // SIWE messages are stored in global state during the login process. The key is the
-    // Ethereum address as a byte array and the value is the SIWE message. After a successful
-    // login, the SIWE message is removed from state.
-    static SIWE_MESSAGES: RefCell<SiweMessageMap> = RefCell::new(SiweMessageMap::new());
+// SIWE messages are stored in global state during the login process. The key is the
+// Ethereum address as a byte array and the value is the SIWE message. After a successful
+// login, the SIWE message is removed from state.
+static SIWE_MESSAGES: OnceCell<RwLock<SiweMessageMap>> = OnceCell::new();
+
+// Initialize global state if not already initialized
+pub(crate) fn ensure_globals_initialized() {
+    RNG.get_or_init(|| RwLock::new(None));
+    SETTINGS.get_or_init(|| RwLock::new(None));
+    SIWE_MESSAGES.get_or_init(|| RwLock::new(SiweMessageMap::new()));
 }

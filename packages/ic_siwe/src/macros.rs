@@ -17,13 +17,16 @@
 /// This macro will pass the global `Settings` instance to the closure, allowing you to use the settings without manually fetching them.
 #[macro_export]
 macro_rules! with_settings {
-    ($body:expr) => {
-        $crate::SETTINGS.with_borrow(|s| {
-            let settings = s
-                .as_ref()
-                .unwrap_or_else(|| ic_cdk::trap("Settings are not initialized."));
-            #[allow(clippy::redundant_closure_call)]
-            $body(settings)
-        })
-    };
+    ($body:expr) => {{
+        $crate::ensure_globals_initialized();
+        let guard = $crate::SETTINGS
+            .get()
+            .expect("SETTINGS global state should be initialized")
+            .read()
+            .unwrap();
+        let settings =
+            guard.as_ref().unwrap_or_else(|| ic_cdk::trap("Settings are not initialized."));
+        #[allow(clippy::redundant_closure_call)]
+        $body(settings)
+    }};
 }
