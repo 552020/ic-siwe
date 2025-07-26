@@ -113,9 +113,7 @@ pub fn create_delegation(
 ) -> Result<Delegation, DelegationError> {
     // Validate the session key and expiration
     if session_key.is_empty() {
-        return Err(DelegationError::InvalidSessionKey(
-            "Session key is empty".to_string(),
-        ));
+        return Err(DelegationError::InvalidSessionKey("Session key is empty".to_string()));
     }
 
     // Validate the session key is DER-encoded
@@ -124,9 +122,7 @@ pub fn create_delegation(
     })?;
 
     if expiration == 0 {
-        return Err(DelegationError::InvalidExpiration(
-            "Expiration is 0".to_string(),
-        ));
+        return Err(DelegationError::InvalidExpiration("Expiration is 0".to_string()));
     }
     with_settings!(|settings: &Settings| {
         Ok(Delegation {
@@ -161,10 +157,7 @@ pub fn witness(
     let witness_hash = witness.reconstruct();
     let root_hash = signature_map.root_hash();
     if witness_hash != root_hash {
-        return Err(DelegationError::WitnessHashMismatch(
-            witness_hash,
-            root_hash,
-        ));
+        return Err(DelegationError::WitnessHashMismatch(witness_hash, root_hash));
     }
 
     Ok(witness)
@@ -182,10 +175,8 @@ pub fn create_certified_signature(
     certificate: Vec<u8>,
     tree: HashTree,
 ) -> Result<Vec<u8>, DelegationError> {
-    let certificate_signature = CertificateSignature {
-        certificate: ByteBuf::from(certificate),
-        tree,
-    };
+    let certificate_signature =
+        CertificateSignature { certificate: ByteBuf::from(certificate), tree };
 
     cbor_serialize(&certificate_signature)
 }
@@ -261,7 +252,7 @@ mod tests {
     use ic_certified_map::labeled_hash;
     use simple_asn1::from_der;
 
-    use crate::{settings::SettingsBuilder, SETTINGS};
+    use crate::settings::SettingsBuilder;
 
     use super::*;
 
@@ -275,7 +266,14 @@ mod tests {
         let builder = SettingsBuilder::new("example.com", "http://example.com", "some_salt")
             .targets(vec![Principal::from_text("aaaaa-aa").unwrap()]);
         let settings = builder.build().unwrap();
-        SETTINGS.set(Some(settings));
+        use crate::{ensure_globals_initialized, SETTINGS};
+        ensure_globals_initialized();
+        SETTINGS
+            .get()
+            .expect("SETTINGS global state should be initialized")
+            .write()
+            .unwrap()
+            .replace(settings);
         EthAddress::new("0x1111111111111111111111111111111111111111").unwrap()
     }
 
@@ -440,10 +438,7 @@ mod tests {
         assert!(result.is_ok());
         let pubkey = result.unwrap();
         let result = from_der(&pubkey);
-        assert!(
-            result.is_ok(),
-            "Result should be a valid DER-encoded public key"
-        );
+        assert!(result.is_ok(), "Result should be a valid DER-encoded public key");
     }
 
     #[test]
@@ -451,10 +446,6 @@ mod tests {
         let cbor = cbor_serialize(&vec![1, 2, 3]).unwrap();
         assert!(!cbor.is_empty(), "CBOR should not be empty");
         let deserialized = serde_cbor::from_slice::<Vec<u8>>(&cbor).unwrap();
-        assert_eq!(
-            deserialized,
-            vec![1, 2, 3],
-            "Deserialized CBOR should match"
-        );
+        assert_eq!(deserialized, vec![1, 2, 3], "Deserialized CBOR should match");
     }
 }
