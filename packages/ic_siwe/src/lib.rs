@@ -176,6 +176,8 @@ pub(crate) mod rand;
 pub mod settings;
 pub mod signature_map;
 pub mod siwe;
+#[cfg(test)]
+mod tests;
 pub(crate) mod time;
 
 pub use init::init;
