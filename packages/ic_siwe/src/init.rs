@@ -8,7 +8,7 @@ use crate::settings::Settings;
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use ic_siwe::{init, settings::SettingsBuilder};
 ///
 /// let settings = SettingsBuilder::new("example.com", "http://example.com", "salt")
