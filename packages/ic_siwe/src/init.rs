@@ -50,21 +50,29 @@ fn init_rng() {
     // Ensure global state is initialized
     ensure_globals_initialized();
 
+    ic_cdk::println!("🚀 Setting up RNG timer callback...");
+
     // Use timer-based initialization to avoid init mode restrictions
     ic_cdk_timers::set_timer(Duration::ZERO, || {
-        ic_cdk::futures::spawn(async {
-            let response =
-                ic_cdk::call::Call::unbounded_wait(Principal::management_canister(), "raw_rand")
-                    .with_arg(())
-                    .await
-                    .unwrap();
-            let seed: Vec<u8> = candid::decode_one(&response.into_bytes()).unwrap();
-            let seed_array: [u8; 32] = seed.try_into().unwrap();
-            RNG.get()
-                .expect("RNG global state should be initialized")
-                .write()
-                .unwrap()
-                .replace(ChaCha20Rng::from_seed(seed_array));
+        ic_cdk::println!("⏰ Timer callback triggered!");
+        ic_cdk::spawn(async {
+            ic_cdk::println!("🔧 Starting RNG initialization...");
+            match ic_cdk::call(Principal::management_canister(), "raw_rand", ()).await {
+                Ok((seed,)) => {
+                    ic_cdk::println!("✅ Got raw_rand response, initializing RNG...");
+                    RNG.get()
+                        .expect("RNG global state should be initialized")
+                        .write()
+                        .unwrap()
+                        .replace(ChaCha20Rng::from_seed(seed));
+                    ic_cdk::println!("🎉 RNG initialization complete!");
+                }
+                Err(e) => {
+                    ic_cdk::println!("❌ Failed to get raw_rand: {:?}", e);
+                }
+            }
         })
     });
+
+    ic_cdk::println!("📅 Timer callback scheduled successfully");
 }

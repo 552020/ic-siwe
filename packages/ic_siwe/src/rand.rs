@@ -28,3 +28,13 @@ pub(crate) fn generate_nonce() -> Result<String, String> {
     rng.fill(&mut nonce);
     Ok(hex::encode(nonce))
 }
+
+/// Check if the RNG is initialized and ready to use
+pub fn is_rng_ready() -> bool {
+    use crate::{ensure_globals_initialized, RNG};
+
+    // Ensure global state is initialized
+    ensure_globals_initialized();
+
+    RNG.get().expect("RNG global state should be initialized").read().unwrap().is_some()
+}
